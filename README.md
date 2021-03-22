@@ -1,6 +1,6 @@
 # djangoWords
 
-djangoWords, a django API service created by Max Rosenberg
+djangoWords, a Django API service created by Max Rosenberg
 
 Features:
 
