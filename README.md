@@ -11,3 +11,4 @@ Features:
 - The game master is able to see a list of names who have submitted words or phrases for the game
 - The game master is able to "start" the game after which, the submission of words or phrases will not work and new users cannot join
 - Upon the start API call, all the words and phrases are returned to the game master in a randomized order
+- To run the unit tests, use the command `python manage.py test words`
