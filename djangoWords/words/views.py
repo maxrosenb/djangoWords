@@ -29,14 +29,13 @@ def create_auth(request):
 def get_word_creators(request, pk):
     """Returns a list of users that have submitted words for a given game"""
 
-    game = Game.objects.get(pk=pk)
+    game = get_object_or_404(Game, pk=pk)
     # Only the game master can see the list of word creators
     if game.master.id == request.user.id:
-        print("user id: ", request.user.id)
         requested_words = Word.objects.filter(game__pk=pk)
-        word_creators = set([word.creator.username for word in requested_words])
+        word_creators = set([word.creator_name for word in requested_words])
         return Response({"creators": word_creators})
-    return Response({"message": "UNAUTHORIZED"}, status=status.HTTP_401_UNAUTHORIZED)
+    return Response({"message": "Only the game master can view word creators."}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 @api_view(["POST"])
@@ -44,13 +43,14 @@ def create_game(request):
     """Creates a game"""
     game = Game.objects.create(master=request.user)
     game.save()
-    print("game created! game id and master: ", game.id, game.master.username)
     return Response({"message": "Game created", "id": game.id}, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])
+@permission_classes([AllowAny])
 def submit_words(request, pk):
     """Submit words for a given game"""
+    print("SUBMIT_WORDS CALLED")
     game = get_object_or_404(Game, pk=pk)
     if not game.submissions_allowed:
         return Response(
@@ -58,21 +58,47 @@ def submit_words(request, pk):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    user_profile = UserProfile.objects.get(user=request.user)
-    if user_profile.games_submitted_to.filter(id=game.id).exists():
-        return Response(
-            {"message": "You have already submitted words for this game!"}, status=status.HTTP_400_BAD_REQUEST
-        )
-
-    for game_word in request.data:
-        if not request.data[game_word]:
+    for game_word in request.data["words"]:
+        if not game_word:
             return Response({"message": "Please make sure no words are blank."}, status=status.HTTP_400_BAD_REQUEST)
 
-    for game_word in request.data:
-        print("word: ", request.data[game_word])
-        Word.objects.create(text=request.data[game_word], game=game, creator=request.user)
-    user_profile.games_submitted_to.add(game)
-    return Response({"message": "Words submitted"}, status=status.HTTP_201_CREATED)
+    if len(request.data["words"]) != 4:
+        return Response({"message": "Exactly 4 words must be submitted."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # If not anonymous user
+    if request.user.id != None:
+        user_profile = UserProfile.objects.get(user=request.user)
+        if user_profile.games_submitted_to.filter(id=game.id).exists():
+            return Response(
+                {"message": "You have already submitted words for this game!"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        for game_word in request.data["words"]:
+            Word.objects.create(text=game_word, game=game, creator=request.user, creator_name=request.user.username)
+            user_profile.games_submitted_to.add(game)
+        return Response({"message": "Words submitted"}, status=status.HTTP_201_CREATED)
+
+    # If anonymous user
+    else:
+        print("ANON USER FOUND")
+        if "name" not in request.data:
+            return Response(
+                {"message": "A name must be provided by anonymous users."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        for game_word in request.data["words"]:
+            Word.objects.create(text=game_word, game=game, creator_name=request.data["name"])
+        return Response({"message": "Words submitted"}, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def submit_words_without_account(request, pk):
+    """Submit words for a given game without an account"""
+    game = get_object_or_404(Game, pk=pk)
+    if not game.submissions_allowed:
+        return Response(
+            {"message": "This game has started and new submissions are not allowed."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 @api_view(["PUT"])
