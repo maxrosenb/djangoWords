@@ -11,7 +11,7 @@ import random
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
-def create_auth(request):
+def register(request):
     user_serializer = UserSerializer(data=request.data)
     if user_serializer.is_valid():
         user = User.objects.create_user(
@@ -25,19 +25,6 @@ def create_auth(request):
         return Response(user_serializer._errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(["GET"])
-def get_word_creators(request, pk):
-    """Returns a list of users that have submitted words for a given game"""
-
-    game = get_object_or_404(Game, pk=pk)
-    # Only the game master can see the list of word creators
-    if game.master.id == request.user.id:
-        requested_words = Word.objects.filter(game__pk=pk)
-        word_creators = set([word.creator_name for word in requested_words])
-        return Response({"creators": word_creators})
-    return Response({"message": "Only the game master can view word creators."}, status=status.HTTP_401_UNAUTHORIZED)
-
-
 @api_view(["POST"])
 def create_game(request):
     """Creates a game"""
@@ -46,11 +33,10 @@ def create_game(request):
     return Response({"message": "Game created", "id": game.id}, status=status.HTTP_201_CREATED)
 
 
-@api_view(["POST"])
+@api_view(["PUT"])
 @permission_classes([AllowAny])
 def submit_words(request, pk):
     """Submit words for a given game"""
-    print("SUBMIT_WORDS CALLED")
     game = get_object_or_404(Game, pk=pk)
     if not game.submissions_allowed:
         return Response(
@@ -58,16 +44,19 @@ def submit_words(request, pk):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Blank words are not allowed
     for game_word in request.data["words"]:
         if not game_word:
             return Response({"message": "Please make sure no words are blank."}, status=status.HTTP_400_BAD_REQUEST)
 
+    # Submission must contain exactly 4 words
     if len(request.data["words"]) != 4:
         return Response({"message": "Exactly 4 words must be submitted."}, status=status.HTTP_400_BAD_REQUEST)
 
     # If not anonymous user
     if request.user.id != None:
         user_profile = UserProfile.objects.get(user=request.user)
+        # If user has already submitted worse for this game
         if user_profile.games_submitted_to.filter(id=game.id).exists():
             return Response(
                 {"message": "You have already submitted words for this game!"}, status=status.HTTP_400_BAD_REQUEST
@@ -79,7 +68,6 @@ def submit_words(request, pk):
 
     # If anonymous user
     else:
-        print("ANON USER FOUND")
         if "name" not in request.data:
             return Response(
                 {"message": "A name must be provided by anonymous users."}, status=status.HTTP_400_BAD_REQUEST
@@ -89,16 +77,17 @@ def submit_words(request, pk):
         return Response({"message": "Words submitted"}, status=status.HTTP_201_CREATED)
 
 
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def submit_words_without_account(request, pk):
-    """Submit words for a given game without an account"""
+@api_view(["GET"])
+def list_word_creators(request, pk):
+    """Returns a list of users that have submitted words for a given game"""
+
     game = get_object_or_404(Game, pk=pk)
-    if not game.submissions_allowed:
-        return Response(
-            {"message": "This game has started and new submissions are not allowed."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    # Only the game master can see the list of word creators
+    if game.master.id == request.user.id:
+        requested_words = Word.objects.filter(game__id=pk)
+        word_creators = set([word.creator_name for word in requested_words])
+        return Response({"creators": word_creators})
+    return Response({"message": "Only the game master can view word creators."}, status=status.HTTP_403_FORBIDDEN)
 
 
 @api_view(["PUT"])
