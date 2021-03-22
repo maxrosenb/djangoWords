@@ -1,3 +1,4 @@
+import random
 from django.contrib.auth.models import User, Group
 from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
@@ -6,7 +7,6 @@ from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 from words.serializers import UserSerializer, GroupSerializer, GameSerializer, WordSerializer
 from words.models import Game, Word, UserProfile
-import random
 
 
 @api_view(["POST"])
